@@ -1,135 +1,370 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<style>
-body {
-  background-color: black;
-  color: white;
-}
-</style>
-<script>
-window.onload = main;
-
-var gl;
-var canvas;
-
-function loadShader(source, type) {
-  var shader = gl.createShader(type);
-  gl.shaderSource(shader, source);
-  gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    alert(gl.getShaderParameter(shader,gl.INFO_LOG));
-  }
-  return shader;
-}
-
-function loadProgram(vertexShaderSource, fragmentShaderSource) {
-  var vertexShader = loadShader(vertexShaderSource, gl.VERTEX_SHADER);
-  var fragmentShader = loadShader(fragmentShaderSource, gl.FRAGMENT_SHADER);
-  var program = gl.createProgram();
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    alert(gl.getProgramParameter(program, gl.INFO_LOG));
-  }
-  return program;
-}
-
-function main() {
-  canvas = document.getElementById("mycanvas");
-  gl = canvas.getContext("experimental-webgl");
-  gl.clearColor(1, 0, 1, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-
-  var positions = new Float32Array(
-    [ 0.0, 0.0,
-     50.0, 0.0,
-     50.0, 50.0,
-      0.0, 50.0]);
-
-  var indices = new Uint16Array(
-    [0, 1,
-     1, 2,
-     2, 3,
-     3, 0]);
-
-  var positionBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-  var indexBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-
-  var program = loadProgram(
-    document.getElementById("vertexShader").text,
-    document.getElementById("fragmentShader").text);
-
-  gl.useProgram(program);
-  var positionLocation = gl.getAttribLocation(program, "position");
-  gl.enableVertexAttribArray(positionLocation);
-  gl.vertexAttribPointer(
-      positionLocation,  // index
-      2,                 // number of components per element
-      gl.FLOAT,          // type of data
-      false,             // normalized
-      0,                 // stride
-      0);                // offset
-
-  var ploc = gl.getUniformLocation(program, "projection");
-  var mloc = gl.getUniformLocation(program, "model");
-  gl.uniformMatrix4fv(ploc, false,
-    [2 / canvas.width, 0, 0, 0,
-     0, -2 / canvas.height, 0, 0,
-     0, 0, 1, 0,
-     -1 + 1 / canvas.width, 1 - 1 / canvas.height, 0, 1]);
-
-  for (var ii = 0; ii < 800; ii += 50) {
-    gl.uniformMatrix4fv(mloc, false,
-      [1, 0, 0, 0,
-       0, 1, 0, 0,
-       0, 0, 1, 0,
-       ii, 0, 0, 1]);
-    gl.drawElements(
-        gl.LINES,           // what to draw
-        8,                  // number of vertices
-        gl.UNSIGNED_SHORT,  // type of indices
-        0);                 // offset
-  }
-  for (var ii = 0; ii < 600; ii += 50) {
-    gl.uniformMatrix4fv(mloc, false,
-      [1, 0, 0, 0,
-       0, 1, 0, 0,
-       0, 0, 1, 0,
-       0, ii, 0, 1]);
-    gl.drawElements(
-        gl.LINES,           // what to draw
-        8,                  // number of vertices
-        gl.UNSIGNED_SHORT,  // type of indices
-        0);                 // offset
-  }
-}
-
-</script>
-<script id="vertexShader" type="something-not-js">
-//
-attribute vec4 position;
-uniform mat4 projection;
-uniform mat4 model;
-
-void main(void) {
-  gl_Position = projection * model * position;
-}
-</script>
-<script id="fragmentShader" type="something-not-js">
-//
-void main(void) {
-  gl_FragColor = vec4(1, 1, 0, 1);
-}
-</script>
+  <meta charset="UTF-8" />
+  <title>Minecraft-like WebGL Prototype</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #000;
+      font-family: sans-serif;
+      color: #fff;
+    }
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.7);
+      cursor: pointer;
+      z-index: 10;
+    }
+    #overlay span {
+      font-size: 20px;
+      padding: 12px 20px;
+      border: 1px solid #fff;
+      border-radius: 4px;
+    }
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      margin-left: -8px;
+      margin-top: -8px;
+      pointer-events: none;
+      z-index: 5;
+    }
+    #crosshair:before,
+    #crosshair:after {
+      content: "";
+      position: absolute;
+      background: #fff;
+    }
+    #crosshair:before {
+      left: 7px;
+      top: 0;
+      width: 2px;
+      height: 16px;
+    }
+    #crosshair:after {
+      top: 7px;
+      left: 0;
+      width: 16px;
+      height: 2px;
+    }
+    #hint {
+      position: fixed;
+      left: 10px;
+      bottom: 10px;
+      font-size: 13px;
+      opacity: 0.8;
+      z-index: 5;
+    }
+  </style>
 </head>
 <body>
-<div>Pixel Perfect 2D in WebGL</div>
-<canvas id="mycanvas" width="800" height="600"></canvas>
+  <div id="overlay"><span>Click to play (WASD to move, Space to jump, LMB break, RMB place)</span></div>
+  <div id="crosshair"></div>
+  <div id="hint">WASD: move · Space: jump · LMB: break block · RMB: place block</div>
+
+  <!-- Three.js from CDN -->
+  <script src="https://unpkg.com/three@0.164.0/build/three.min.js"></script>
+
+  <script>
+    // ====== BASIC THREE.JS SETUP ======
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // sky
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // ====== LIGHTING ======
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+    hemiLight.position.set(0, 50, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    // ====== BLOCK WORLD ======
+    const BLOCK_SIZE = 1;
+    const WORLD_WIDTH = 32;
+    const WORLD_DEPTH = 32;
+    const MAX_HEIGHT = 6;
+
+    const blockGeometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+
+    const materials = {
+      grass: new THREE.MeshLambertMaterial({ color: 0x3cb043 }),
+      dirt:  new THREE.MeshLambertMaterial({ color: 0x8b4513 }),
+      stone: new THREE.MeshLambertMaterial({ color: 0x777777 })
+    };
+
+    // Store blocks in a map: key "x,y,z" -> mesh
+    const blocks = new Map();
+
+    function keyFromPos(x, y, z) {
+      return `${x},${y},${z}`;
+    }
+
+    function getHeight(x, z) {
+      // Simple fake terrain
+      const h = Math.floor(
+        2 +
+        Math.sin(x * 0.3) * 1.5 +
+        Math.cos(z * 0.3) * 1.5
+      );
+      return THREE.MathUtils.clamp(h, 1, MAX_HEIGHT);
+    }
+
+    function addBlock(x, y, z, type = "grass") {
+      const mesh = new THREE.Mesh(blockGeometry, materials[type] || materials.grass);
+      mesh.position.set(
+        x * BLOCK_SIZE,
+        y * BLOCK_SIZE,
+        z * BLOCK_SIZE
+      );
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+      blocks.set(keyFromPos(x, y, z), mesh);
+    }
+
+    function removeBlock(x, y, z) {
+      const key = keyFromPos(x, y, z);
+      const mesh = blocks.get(key);
+      if (!mesh) return;
+      scene.remove(mesh);
+      blocks.delete(key);
+    }
+
+    // Generate terrain
+    for (let x = 0; x < WORLD_WIDTH; x++) {
+      for (let z = 0; z < WORLD_DEPTH; z++) {
+        const height = getHeight(x, z);
+        for (let y = 0; y < height; y++) {
+          let type;
+          if (y === height - 1) type = "grass";
+          else if (y >= height - 3) type = "dirt";
+          else type = "stone";
+          addBlock(x, y, z, type);
+        }
+      }
+    }
+
+    // ====== PLAYER / FPS CONTROLS ======
+    const overlay = document.getElementById("overlay");
+    let controlsEnabled = false;
+
+    const velocity = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const moveForward = { value: false };
+    const moveBackward = { value: false };
+    const moveLeft = { value: false };
+    const moveRight = { value: false };
+    let canJump = false;
+
+    const playerHeight = 1.8;
+    const playerRadius = 0.3;
+    const gravity = 25;
+    const jumpSpeed = 8;
+
+    camera.position.set(WORLD_WIDTH / 2, playerHeight + 5, WORLD_DEPTH / 2);
+    let yaw = 0;
+    let pitch = 0;
+
+    function lockPointer() {
+      const canvas = renderer.domElement;
+      if (canvas.requestPointerLock) {
+        canvas.requestPointerLock();
+      }
+    }
+
+    document.addEventListener("pointerlockchange", () => {
+      const locked = document.pointerLockElement === renderer.domElement;
+      controlsEnabled = locked;
+      overlay.style.display = locked ? "none" : "flex";
+    });
+
+    overlay.addEventListener("click", () => {
+      lockPointer();
+    });
+
+    document.addEventListener("mousemove", (event) => {
+      if (!controlsEnabled) return;
+      const movementX = event.movementX || 0;
+      const movementY = event.movementY || 0;
+
+      const sensitivity = 0.002;
+      yaw -= movementX * sensitivity;
+      pitch -= movementY * sensitivity;
+
+      const maxPitch = Math.PI / 2 - 0.01;
+      pitch = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+
+      camera.rotation.set(pitch, yaw, 0, "YXZ");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      switch (event.code) {
+        case "KeyW": moveForward.value = true; break;
+        case "KeyS": moveBackward.value = true; break;
+        case "KeyA": moveLeft.value = true; break;
+        case "KeyD": moveRight.value = true; break;
+        case "Space":
+          if (canJump) {
+            velocity.y = jumpSpeed;
+            canJump = false;
+          }
+          break;
+      }
+    });
+
+    document.addEventListener("keyup", (event) => {
+      switch (event.code) {
+        case "KeyW": moveForward.value = false; break;
+        case "KeyS": moveBackward.value = false; break;
+        case "KeyA": moveLeft.value = false; break;
+        case "KeyD": moveRight.value = false; break;
+      }
+    });
+
+    // ====== RAYCASTING FOR BLOCK INTERACTION ======
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(0, 0); // center of screen
+
+    function getBlockFromRay(addAdjacent = false) {
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(Array.from(blocks.values()));
+      if (intersects.length === 0) return null;
+
+      const hit = intersects[0];
+      const normal = hit.face.normal.clone();
+      const hitPos = hit.object.position.clone().divideScalar(BLOCK_SIZE);
+
+      let x = Math.round(hitPos.x);
+      let y = Math.round(hitPos.y);
+      let z = Math.round(hitPos.z);
+
+      if (addAdjacent) {
+        x += normal.x;
+        y += normal.y;
+        z += normal.z;
+      }
+
+      return { x, y, z };
+    }
+
+    document.addEventListener("mousedown", (event) => {
+      if (!controlsEnabled) return;
+
+      if (event.button === 0) {
+        // Left click: break block
+        const target = getBlockFromRay(false);
+        if (target) {
+          removeBlock(target.x, target.y, target.z);
+        }
+      } else if (event.button === 2) {
+        // Right click: place block
+        const target = getBlockFromRay(true);
+        if (target) {
+          const blockWorldPos = new THREE.Vector3(
+            target.x * BLOCK_SIZE,
+            target.y * BLOCK_SIZE,
+            target.z * BLOCK_SIZE
+          );
+          const dx = blockWorldPos.x - camera.position.x;
+          const dy = blockWorldPos.y - camera.position.y;
+          const dz = blockWorldPos.z - camera.position.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist > playerRadius + BLOCK_SIZE * 0.5) {
+            addBlock(target.x, target.y, target.z, "grass");
+          }
+        }
+      }
+    });
+
+    // Prevent context menu on right click
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    // ====== MOVEMENT / PHYSICS UPDATE ======
+    let prevTime = performance.now();
+
+    function update() {
+      const time = performance.now();
+      const delta = (time - prevTime) / 1000;
+      prevTime = time;
+
+      if (controlsEnabled) {
+        const speed = 8;
+
+        direction.set(0, 0, 0);
+        if (moveForward.value) direction.z -= 1;
+        if (moveBackward.value) direction.z += 1;
+        if (moveLeft.value) direction.x -= 1;
+        if (moveRight.value) direction.x += 1;
+        if (direction.lengthSq() > 0) direction.normalize();
+
+        const sinY = Math.sin(yaw);
+        const cosY = Math.cos(yaw);
+
+        const forward = new THREE.Vector3(-sinY, 0, -cosY);
+        const right = new THREE.Vector3(cosY, 0, -sinY);
+
+        const move = new THREE.Vector3();
+        move.addScaledVector(forward, direction.z);
+        move.addScaledVector(right, direction.x);
+        if (move.lengthSq() > 0) move.normalize();
+
+        velocity.x = move.x * speed;
+        velocity.z = move.z * speed;
+
+        velocity.y -= gravity * delta;
+
+        const oldPosition = camera.position.clone();
+        const newPosition = oldPosition.clone();
+        newPosition.x += velocity.x * delta;
+        newPosition.y += velocity.y * delta;
+        newPosition.z += velocity.z * delta;
+
+        const groundY = playerHeight;
+        if (newPosition.y < groundY) {
+          newPosition.y = groundY;
+          velocity.y = 0;
+          canJump = true;
+        }
+
+        camera.position.copy(newPosition);
+      }
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(update);
+    }
+
+    update();
+
+    // ====== RESIZE ======
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </body>
 </html>
