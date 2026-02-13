@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>3D Debug</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #000; }
+</style>
+</head>
+<body>
+
+<script src="https://unpkg.com/three@0.164.0/build/three.min.js"></script>
+
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb); // bright sky blue
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0, 50, 50); // WAY above the world
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// LIGHTS
+scene.add(new THREE.AmbientLight(0xffffff, 1));
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(50, 100, 50);
+scene.add(sun);
+
+// DEBUG GRID
+const grid = new THREE.GridHelper(200, 50);
+scene.add(grid);
+
+// DEBUG CUBE (you MUST see this)
+const debugCube = new THREE.Mesh(
+  new THREE.BoxGeometry(10, 10, 10),
+  new THREE.MeshStandardMaterial({ color: 0xff0000 })
+);
+debugCube.position.set(0, 5, 0);
+scene.add(debugCube);
+
+// WORLD GENERATION TEST
+let blockCount = 0;
+const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+const blockMat = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+
+for (let x = -10; x <= 10; x++) {
+  for (let z = -10; z <= 10; z++) {
+    const block = new THREE.Mesh(blockGeo, blockMat);
+    block.position.set(x, 0, z);
+    scene.add(block);
+    blockCount++;
+  }
+}
+
+console.log("Blocks created:", blockCount);
+
+// RENDER LOOP
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+// RESIZE
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+
+</body>
+</html>
